@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model CachedUser {
+  id              String   @id // MS Graph user ID
+  displayName     String
+  mail            String?
+  userPrincipalName String
+  accountEnabled  Boolean  @default(true)
+  jobTitle        String?
+  department      String?
+  cachedAt        DateTime @default(now())
+
+  listMembers     ListMember[]
+  operationItems  OperationItem[]
+  auditEntries    AuditEntry[]
+}
+
+model UserList {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdBy   String   // admin UPN
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members    ListMember[]
+  operations Operation[]
+}
+
+model ListMember {
+  listId String
+  userId String
+
+  list UserList    @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user CachedUser  @relation(fields: [userId], references: [id])
+
+  addedAt DateTime @default(now())
+
+  @@id([listId, userId])
+}
+
+model Operation {
+  id           String   @id @default(cuid())
+  type         String   // assign_license, remove_license, add_to_group, remove_from_group
+  status       String   @default("pending") // pending, running, completed, failed, partial
+  listId       String
+  params       String   // JSON - SKU IDs, group IDs, etc.
+  totalCount   Int      @default(0)
+  successCount Int      @default(0)
+  skippedCount Int      @default(0)
+  failedCount  Int      @default(0)
+  createdBy    String   // admin UPN
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  list  UserList        @relation(fields: [listId], references: [id])
+  items OperationItem[]
+}
+
+model OperationItem {
+  id          String  @id @default(cuid())
+  operationId String
+  userId      String
+  status      String  @default("pending") // pending, success, skipped, failed
+  detail      String? // reason for skip/failure
+
+  operation Operation  @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  user      CachedUser @relation(fields: [userId], references: [id])
+
+  @@unique([operationId, userId])
+}
+
+model AuditEntry {
+  id          String   @id @default(cuid())
+  timestamp   DateTime @default(now())
+  adminUpn    String
+  action      String   // assign_license, remove_license, add_to_group, remove_from_group
+  operationId String?
+  targetUserId String?
+  targetUserName String?
+  detail      String
+
+  targetUser CachedUser? @relation(fields: [targetUserId], references: [id])
+}
