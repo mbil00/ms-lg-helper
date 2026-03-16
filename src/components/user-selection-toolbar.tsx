@@ -1,7 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { ListPlus, RotateCcw, CheckSquare, Square, Percent, Hash } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  ListPlus,
+  RotateCcw,
+  CheckSquare,
+  Square,
+  Percent,
+  Hash,
+  Zap,
+  Loader2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +37,12 @@ export function UserSelectionToolbar({
   allIds,
   onSelectionChange,
 }: UserSelectionToolbarProps) {
-  const [addToListOpen, setAddToListOpen] = useState(false);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [selectNOpen, setSelectNOpen] = useState(false);
   const [selectNValue, setSelectNValue] = useState("");
+  const [isStartingAction, setIsStartingAction] = useState(false);
 
   const handleSelectAll = () => {
     onSelectionChange([...allIds]);
@@ -55,6 +70,54 @@ export function UserSelectionToolbar({
     }
     setSelectNOpen(false);
     setSelectNValue("");
+  };
+
+  const handleRunAction = async () => {
+    if (selectedIds.length === 0 || isStartingAction) {
+      return;
+    }
+
+    setIsStartingAction(true);
+
+    try {
+      const timestamp = new Date().toLocaleString();
+
+      const createListResponse = await fetch("/api/lists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `Action ${timestamp}`,
+          description: "Temporary list created from the selection toolbar.",
+        }),
+      });
+
+      if (!createListResponse.ok) {
+        throw new Error("Failed to create action list");
+      }
+
+      const list = (await createListResponse.json()) as { id: string };
+
+      const addMembersResponse = await fetch(`/api/lists/${list.id}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: selectedIds }),
+      });
+
+      if (!addMembersResponse.ok) {
+        throw new Error("Failed to populate action list");
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
+      onSelectionChange([]);
+      toast.success("Temporary action list created");
+      router.push(`/actions?listId=${list.id}`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to start action";
+      toast.error(message);
+    } finally {
+      setIsStartingAction(false);
+    }
   };
 
   return (
@@ -120,18 +183,33 @@ export function UserSelectionToolbar({
       <Button
         variant="outline"
         size="sm"
-        onClick={() => setAddToListOpen(true)}
+        onClick={() => {
+          setDialogOpen(true);
+        }}
         disabled={selectedIds.length === 0}
       >
         <ListPlus className="mr-1 h-3.5 w-3.5" />
         Add to list
       </Button>
 
+      <Button
+        size="sm"
+        onClick={handleRunAction}
+        disabled={selectedIds.length === 0 || isStartingAction}
+      >
+        {isStartingAction ? (
+          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Zap className="mr-1 h-3.5 w-3.5" />
+        )}
+        Run action
+      </Button>
+
       <AddToListDialog
         selectedUserIds={selectedIds}
         onDone={handleSelectNone}
-        open={addToListOpen}
-        onOpenChange={setAddToListOpen}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
       />
     </div>
   );

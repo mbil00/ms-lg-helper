@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGraphClient, getAllPages, withRetry } from "@/lib/graph";
-import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth-guard";
+import {
+  forbiddenResponse,
+  getAuthenticatedUser,
+  unauthorizedResponse,
+  userIsAdmin,
+} from "@/lib/auth-guard";
 import type { GraphLicense, GraphUser, GraphGroup, LicenseAssignee } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   const { searchParams } = new URL(request.url);
   const skuId = searchParams.get("skuId");

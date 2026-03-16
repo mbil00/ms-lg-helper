@@ -56,7 +56,7 @@ export default function UsersPage() {
       if (!res.ok) throw new Error("Failed to refresh");
       await refetch();
       toast.success("Users refreshed from Microsoft Graph");
-    } catch (err) {
+    } catch {
       toast.error("Failed to refresh users from Graph");
     } finally {
       setIsRefreshing(false);
@@ -201,7 +201,7 @@ export default function UsersPage() {
         />
       </div>
 
-      {selectedIds.length > 0 && (
+      {users.length > 0 && (
         <UserSelectionToolbar
           totalCount={users.length}
           selectedIds={selectedIds}
@@ -273,17 +273,17 @@ export default function UsersPage() {
 
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Showing{" "}
-              {table.getState().pagination.pageIndex *
-                table.getState().pagination.pageSize +
-                1}
-              -
-              {Math.min(
-                (table.getState().pagination.pageIndex + 1) *
-                  table.getState().pagination.pageSize,
-                table.getFilteredRowModel().rows.length
-              )}{" "}
-              of {table.getFilteredRowModel().rows.length} users
+              {table.getFilteredRowModel().rows.length === 0
+                ? "Showing 0 of 0 users"
+                : `Showing ${
+                    table.getState().pagination.pageIndex *
+                      table.getState().pagination.pageSize +
+                    1
+                  }-${Math.min(
+                    (table.getState().pagination.pageIndex + 1) *
+                      table.getState().pagination.pageSize,
+                    table.getFilteredRowModel().rows.length
+                  )} of ${table.getFilteredRowModel().rows.length} users`}
             </p>
             <div className="flex items-center gap-2">
               <Button

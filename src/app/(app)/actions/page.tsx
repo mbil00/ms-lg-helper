@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -115,7 +115,7 @@ export default function ActionsPage() {
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
   const [dryRunDialogOpen, setDryRunDialogOpen] = useState(false);
 
-  const { data: lists = [], isLoading: listsLoading } = useQuery<UserList[]>({
+  const { data: lists = [] } = useQuery<UserList[]>({
     queryKey: ["lists"],
     queryFn: async () => {
       const res = await fetch("/api/lists");
@@ -213,10 +213,10 @@ export default function ActionsPage() {
       return res.json();
     },
     onSuccess: (data) => {
-      toast.success("Action started");
+      toast.success("Action completed");
       queryClient.invalidateQueries({ queryKey: ["operations"] });
-      if (data.operationId) {
-        router.push(`/actions/${data.operationId}`);
+      if (data.id) {
+        router.push(`/actions/${data.id}`);
       }
     },
     onError: (err) => {

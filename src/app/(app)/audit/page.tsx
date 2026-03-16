@@ -8,7 +8,7 @@ import {
   createColumnHelper,
   flexRender,
 } from "@tanstack/react-table";
-import { Search, Filter } from "lucide-react";
+import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -143,6 +143,7 @@ export default function AuditPage() {
     }),
   ];
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: entries,
     columns,

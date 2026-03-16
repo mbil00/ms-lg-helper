@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -54,7 +53,6 @@ interface ListDetail {
   createdBy: string | null;
   createdAt: string;
   members: {
-    id: string;
     userId: string;
     user?: {
       id: string;
@@ -69,7 +67,6 @@ interface ListDetail {
 }
 
 interface ListMember {
-  id: string;
   userId: string;
   displayName: string;
   mail: string | null;
@@ -106,7 +103,6 @@ export default function ListDetailPage() {
   const members: ListMember[] = useMemo(() => {
     if (!list?.members) return [];
     return list.members.map((m) => ({
-      id: m.id,
       userId: m.userId,
       displayName: m.user?.displayName ?? m.displayName ?? "",
       mail: m.user?.mail ?? m.mail ?? null,
@@ -136,11 +132,11 @@ export default function ListDetailPage() {
   });
 
   const removeMembersMutation = useMutation({
-    mutationFn: async (memberIds: string[]) => {
+    mutationFn: async (userIds: string[]) => {
       const res = await fetch(`/api/lists/${listId}/members`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberIds }),
+        body: JSON.stringify({ userIds }),
       });
       if (!res.ok) throw new Error("Failed to remove members");
       return res.json();
@@ -214,6 +210,7 @@ export default function ListDetailPage() {
     []
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: members,
     columns,
@@ -221,7 +218,7 @@ export default function ListDetailPage() {
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getRowId: (row) => row.id,
+    getRowId: (row) => row.userId,
   });
 
   const selectedMemberIds = Object.keys(rowSelection).filter(

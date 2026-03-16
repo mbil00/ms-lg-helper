@@ -1,17 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGraphClient, withRetry } from "@/lib/graph";
 import { db } from "@/lib/db";
-import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth-guard";
+import {
+  forbiddenResponse,
+  getAuthenticatedUser,
+  unauthorizedResponse,
+  userIsAdmin,
+} from "@/lib/auth-guard";
+import { presentOperationDetail, presentOperationSummary } from "@/lib/operation-presenter";
 import type {
   OperationType,
   OperationParams,
   DryRunResult,
-  GraphUser,
 } from "@/lib/types";
 
 export async function GET() {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   try {
     const operations = await db.operation.findMany({
@@ -23,7 +29,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(operations);
+    return NextResponse.json(operations.map(presentOperationSummary));
   } catch (error) {
     console.error("Failed to fetch operations:", error);
     return NextResponse.json(
@@ -120,6 +126,7 @@ async function executeGroupRemove(
 export async function POST(request: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   try {
     const body = await request.json();
@@ -405,7 +412,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(completedOperation);
+    return NextResponse.json(presentOperationDetail(completedOperation));
   } catch (error) {
     console.error("Failed to execute operation:", error);
     return NextResponse.json(

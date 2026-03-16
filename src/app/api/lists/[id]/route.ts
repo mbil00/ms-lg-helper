@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth-guard";
+import {
+  forbiddenResponse,
+  getAuthenticatedUser,
+  unauthorizedResponse,
+  userIsAdmin,
+} from "@/lib/auth-guard";
 
 export async function GET(
   _request: NextRequest,
@@ -8,6 +13,7 @@ export async function GET(
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   const { id } = await params;
 
@@ -44,6 +50,7 @@ export async function PATCH(
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   const { id } = await params;
 
@@ -76,6 +83,7 @@ export async function DELETE(
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   const { id } = await params;
 

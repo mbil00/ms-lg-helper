@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { getAuthenticatedUser } from "@/lib/auth-guard";
+import { getAuthenticatedUser, userIsAdmin } from "@/lib/auth-guard";
 import type { OperationProgress } from "@/lib/types";
 
 export async function GET(
@@ -10,6 +10,9 @@ export async function GET(
   const user = await getAuthenticatedUser();
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
+  }
+  if (!userIsAdmin(user)) {
+    return new Response("Forbidden", { status: 403 });
   }
 
   const { id } = await params;

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth-guard";
+import {
+  forbiddenResponse,
+  getAuthenticatedUser,
+  unauthorizedResponse,
+  userIsAdmin,
+} from "@/lib/auth-guard";
 
 export async function GET() {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   try {
     const lists = await db.userList.findMany({
@@ -29,6 +35,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   try {
     const body = await request.json();

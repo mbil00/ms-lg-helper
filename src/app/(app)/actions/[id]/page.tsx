@@ -2,17 +2,15 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  Play,
   Loader2,
   CheckCircle2,
   XCircle,
   MinusCircle,
   RefreshCw,
 } from "lucide-react";
-import { toast } from "sonner";
 import type { OperationType, OperationParams, OperationProgress } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -100,7 +98,6 @@ function getItemStatusIcon(status: string) {
 export default function ActionDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const queryClient = useQueryClient();
   const operationId = params.id as string;
   const eventSourceRef = useRef<EventSource | null>(null);
   const [liveProgress, setLiveProgress] = useState<OperationProgress | null>(
@@ -166,23 +163,6 @@ export default function ActionDetailPage() {
       }
     };
   }, [operation?.status, connectSSE]);
-
-  const resumeMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`/api/actions/${operationId}/resume`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to resume operation");
-      return res.json();
-    },
-    onSuccess: () => {
-      toast.success("Operation resumed");
-      refetch();
-    },
-    onError: (err) => {
-      toast.error(`Failed to resume: ${err.message}`);
-    },
-  });
 
   if (error) {
     return (
@@ -337,19 +317,6 @@ export default function ActionDetailPage() {
       </Card>
 
       <div className="flex items-center gap-2">
-        {currentStatus === "partial" && (
-          <Button
-            onClick={() => resumeMutation.mutate()}
-            disabled={resumeMutation.isPending}
-          >
-            {resumeMutation.isPending ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="mr-1.5 h-4 w-4" />
-            )}
-            Resume
-          </Button>
-        )}
         <Button variant="outline" size="sm" onClick={() => refetch()}>
           <RefreshCw className="mr-1.5 h-4 w-4" />
           Refresh

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   useReactTable,
@@ -9,8 +9,6 @@ import {
   getPaginationRowModel,
   createColumnHelper,
   flexRender,
-  type ExpandedState,
-  getExpandedRowModel,
 } from "@tanstack/react-table";
 import { Search, ChevronRight, Mail } from "lucide-react";
 import type { GraphGroup, GraphUser } from "@/lib/types";
@@ -59,10 +57,12 @@ function GroupMembersPanel({
   groupId,
   selectedUserIds,
   onToggleUser,
+  onMembersChange,
 }: {
   groupId: string;
   selectedUserIds: Record<string, boolean>;
   onToggleUser: (userId: string) => void;
+  onMembersChange: (userIds: string[]) => void;
 }) {
   const { data: members, isLoading } = useQuery<GraphUser[]>({
     queryKey: ["group-members", groupId],
@@ -72,6 +72,10 @@ function GroupMembersPanel({
       return res.json();
     },
   });
+
+  useEffect(() => {
+    onMembersChange(members?.map((member) => member.id) ?? []);
+  }, [members, onMembersChange]);
 
   if (isLoading) {
     return (
@@ -132,6 +136,7 @@ export default function GroupsPage() {
   const [globalFilter, setGlobalFilter] = useState("");
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<Record<string, boolean>>({});
+  const [availableUserIds, setAvailableUserIds] = useState<string[]>([]);
 
   const {
     data: groups = [],
@@ -213,6 +218,7 @@ export default function GroupsPage() {
     [expandedGroupId]
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: groups,
     columns,
@@ -246,6 +252,16 @@ export default function GroupsPage() {
     }));
   };
 
+  useEffect(() => {
+    if (!expandedGroupId) {
+      setAvailableUserIds([]);
+    }
+  }, [expandedGroupId]);
+
+  const handleVisibleMembersChange = (userIds: string[]) => {
+    setAvailableUserIds(userIds);
+  };
+
   if (error) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -275,11 +291,11 @@ export default function GroupsPage() {
         />
       </div>
 
-      {selectedIds.length > 0 && (
+      {availableUserIds.length > 0 && (
         <UserSelectionToolbar
-          totalCount={selectedIds.length}
+          totalCount={availableUserIds.length}
           selectedIds={selectedIds}
-          allIds={selectedIds}
+          allIds={availableUserIds}
           onSelectionChange={(ids) => {
             const newSelection: Record<string, boolean> = {};
             ids.forEach((id) => {
@@ -327,7 +343,7 @@ export default function GroupsPage() {
                 </TableRow>
               ) : (
                 table.getRowModel().rows.map((row) => (
-                  <>
+                  <Fragment key={row.id}>
                     <TableRow key={row.id}>
                       {row.getVisibleCells().map((cell) => (
                         <TableCell key={cell.id}>
@@ -348,11 +364,12 @@ export default function GroupsPage() {
                             groupId={row.original.id}
                             selectedUserIds={selectedUserIds}
                             onToggleUser={toggleUser}
+                            onMembersChange={handleVisibleMembersChange}
                           />
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 ))
               )}
             </TableBody>

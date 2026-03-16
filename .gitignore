@@ -46,3 +46,6 @@ next-env.d.ts
 # SQLite
 *.db
 *.db-journal
+
+# local planning notes
+.local/

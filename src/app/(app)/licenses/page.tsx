@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { KeyRound, ChevronRight, Users, Shield, X } from "lucide-react";
 import type { GraphLicense, LicenseAssignee, GraphUser } from "@/lib/types";
@@ -14,7 +14,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import {
   Table,
@@ -201,7 +200,7 @@ export default function LicensesPage() {
             </Button>
           </div>
 
-          {selectedIds.length > 0 && (
+          {allSelectableIds.length > 0 && (
             <UserSelectionToolbar
               totalCount={allSelectableIds.length}
               selectedIds={selectedIds}
@@ -235,7 +234,7 @@ export default function LicensesPage() {
               </TableHeader>
               <TableBody>
                 {assignees.map((assignee) => (
-                  <>
+                  <Fragment key={assignee.id}>
                     <TableRow key={assignee.id}>
                       <TableCell>
                         {assignee.type === "user" && (
@@ -361,7 +360,7 @@ export default function LicensesPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                  </>
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>

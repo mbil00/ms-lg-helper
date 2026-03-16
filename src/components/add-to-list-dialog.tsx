@@ -64,14 +64,7 @@ export function AddToListDialog({
         body: JSON.stringify({ name: newName, description: newDescription }),
       });
       if (!res.ok) throw new Error("Failed to create list");
-      return res.json();
-    },
-    onSuccess: (data: ListItem) => {
-      queryClient.invalidateQueries({ queryKey: ["lists"] });
-      setSelectedListId(data.id);
-      setShowCreate(false);
-      setNewName("");
-      setNewDescription("");
+      return res.json() as Promise<ListItem>;
     },
   });
 
@@ -85,28 +78,48 @@ export function AddToListDialog({
       if (!res.ok) throw new Error("Failed to add members");
       return res.json();
     },
-    onSuccess: (_, listId) => {
+  });
+
+  const finalize = (listId: string) => {
+    queryClient.invalidateQueries({ queryKey: ["lists"] });
+    queryClient.invalidateQueries({ queryKey: ["list", listId] });
+    setSelectedListId(null);
+    setShowCreate(false);
+    setNewName("");
+    setNewDescription("");
+    onOpenChange(false);
+    onDone();
+  };
+
+  const handleAdd = async () => {
+    if (!selectedListId) return;
+
+    try {
+      await addMembersMutation.mutateAsync(selectedListId);
       toast.success(
         `Added ${selectedUserIds.length} user${selectedUserIds.length !== 1 ? "s" : ""} to list`
       );
-      queryClient.invalidateQueries({ queryKey: ["lists"] });
-      queryClient.invalidateQueries({ queryKey: ["list", listId] });
-      onOpenChange(false);
-      setSelectedListId(null);
-      onDone();
-    },
-    onError: (error) => {
-      toast.error(`Failed to add members: ${error.message}`);
-    },
-  });
-
-  const handleAdd = () => {
-    if (!selectedListId) return;
-    addMembersMutation.mutate(selectedListId);
+      finalize(selectedListId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to add members";
+      toast.error(message);
+    }
   };
 
-  const handleCreateAndAdd = () => {
-    createListMutation.mutate();
+  const handleCreateAndAdd = async () => {
+    try {
+      const list = await createListMutation.mutateAsync();
+      await addMembersMutation.mutateAsync(list.id);
+      toast.success(
+        `Created list and added ${selectedUserIds.length} user${selectedUserIds.length !== 1 ? "s" : ""}`
+      );
+      finalize(list.id);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to create list";
+      toast.error(message);
+    }
   };
 
   const isPending = addMembersMutation.isPending || createListMutation.isPending;
@@ -197,7 +210,7 @@ export function AddToListDialog({
                 onClick={handleCreateAndAdd}
                 disabled={!newName.trim() || isPending}
               >
-                {createListMutation.isPending && (
+                {isPending && (
                   <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                 )}
                 Create List

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGraphClient, getAllPages, withRetry } from "@/lib/graph";
 import { db } from "@/lib/db";
-import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth-guard";
+import {
+  forbiddenResponse,
+  getAuthenticatedUser,
+  unauthorizedResponse,
+  userIsAdmin,
+} from "@/lib/auth-guard";
 import type { GraphUser } from "@/lib/types";
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -9,6 +14,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 export async function GET(request: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   const { searchParams } = new URL(request.url);
   const forceRefresh = searchParams.get("refresh") === "true";

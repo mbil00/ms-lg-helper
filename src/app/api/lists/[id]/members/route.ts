@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getAuthenticatedUser, unauthorizedResponse } from "@/lib/auth-guard";
+import { getGraphClient, withRetry } from "@/lib/graph";
+import {
+  forbiddenResponse,
+  getAuthenticatedUser,
+  unauthorizedResponse,
+  userIsAdmin,
+} from "@/lib/auth-guard";
+import type { GraphUser } from "@/lib/types";
 
 export async function POST(
   request: NextRequest,
@@ -8,6 +15,7 @@ export async function POST(
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   const { id: listId } = await params;
 
@@ -39,10 +47,69 @@ export async function POST(
       return NextResponse.json({ error: "List not found" }, { status: 404 });
     }
 
-    // Upsert user data into CachedUser if provided
+    const usersToCache = new Map<
+      string,
+      {
+        id: string;
+        displayName: string;
+        mail?: string | null;
+        userPrincipalName: string;
+        accountEnabled?: boolean;
+        jobTitle?: string | null;
+        department?: string | null;
+      }
+    >();
+
     if (users && Array.isArray(users)) {
+      for (const graphUser of users) {
+        usersToCache.set(graphUser.id, graphUser);
+      }
+    }
+
+    const cachedUsers = await db.cachedUser.findMany({
+      where: {
+        id: { in: userIds },
+      },
+      select: { id: true },
+    });
+
+    const cachedUserIds = new Set(cachedUsers.map((cachedUser) => cachedUser.id));
+    const missingUserIds = userIds.filter(
+      (userId) => !cachedUserIds.has(userId) && !usersToCache.has(userId)
+    );
+
+    if (missingUserIds.length > 0) {
+      const client = getGraphClient();
+      const fetchedUsers = await Promise.all(
+        missingUserIds.map(async (userId) => {
+          const graphUser = await withRetry(() =>
+            client
+              .api(`/users/${userId}`)
+              .select([
+                "id",
+                "displayName",
+                "mail",
+                "userPrincipalName",
+                "accountEnabled",
+                "jobTitle",
+                "department",
+              ])
+              .get()
+          );
+
+          return graphUser as GraphUser;
+        })
+      );
+
+      for (const graphUser of fetchedUsers) {
+        usersToCache.set(graphUser.id, graphUser);
+      }
+    }
+
+    // Upsert user data into CachedUser before inserting memberships.
+    if (usersToCache.size > 0) {
       await db.$transaction(
-        users.map((u) =>
+        Array.from(usersToCache.values()).map((u) =>
           db.cachedUser.upsert({
             where: { id: u.id },
             create: {
@@ -103,6 +170,7 @@ export async function DELETE(
 ) {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
+  if (!userIsAdmin(user)) return forbiddenResponse();
 
   const { id: listId } = await params;
 
