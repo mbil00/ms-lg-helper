@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { Plus, ClipboardList, Users, CalendarDays, Loader2 } from "lucide-react";
+import { Plus, ClipboardList, Users, CalendarDays, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ export default function ListsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const {
     data: lists = [],
@@ -78,6 +79,16 @@ export default function ListsPage() {
     },
   });
 
+  const filteredLists = useMemo(() => {
+    if (!searchQuery.trim()) return lists;
+    const q = searchQuery.toLowerCase();
+    return lists.filter(
+      (l) =>
+        l.name.toLowerCase().includes(q) ||
+        l.description?.toLowerCase().includes(q)
+    );
+  }, [lists, searchQuery]);
+
   if (error) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -103,13 +114,25 @@ export default function ListsPage() {
         </Button>
       </div>
 
+      {lists.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search lists..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-36 w-full rounded-xl" />
           ))}
         </div>
-      ) : lists.length === 0 ? (
+      ) : filteredLists.length === 0 && lists.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <ClipboardList className="mb-4 h-12 w-12 text-muted-foreground" />
           <h3 className="text-lg font-medium">No lists yet</h3>
@@ -121,9 +144,13 @@ export default function ListsPage() {
             Create your first list
           </Button>
         </div>
+      ) : filteredLists.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          No lists match your search.
+        </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {lists.map((list) => (
+          {filteredLists.map((list) => (
             <Card
               key={list.id}
               className="cursor-pointer transition-shadow hover:shadow-md"

@@ -26,7 +26,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { UserSelectionToolbar } from "@/components/user-selection-toolbar";
+import { ComparisonIndicator } from "@/components/comparison-indicator";
 import { cn } from "@/lib/utils";
+import { useGlobalSelection, useActiveList, useVisibleUsers } from "@/contexts/list-panel-context";
 
 function getGroupType(group: GraphGroup): string {
   if (group.groupTypes.includes("Unified")) return "M365";
@@ -55,13 +57,9 @@ const columnHelper = createColumnHelper<GraphGroup>();
 
 function GroupMembersPanel({
   groupId,
-  selectedUserIds,
-  onToggleUser,
   onMembersChange,
 }: {
   groupId: string;
-  selectedUserIds: Record<string, boolean>;
-  onToggleUser: (userId: string) => void;
   onMembersChange: (userIds: string[]) => void;
 }) {
   const { data: members, isLoading } = useQuery<GraphUser[]>({
@@ -72,6 +70,9 @@ function GroupMembersPanel({
       return res.json();
     },
   });
+
+  const { selectedIds, toggle: toggleUser } = useGlobalSelection();
+  const { activeListId } = useActiveList();
 
   useEffect(() => {
     onMembersChange(members?.map((member) => member.id) ?? []);
@@ -101,6 +102,7 @@ function GroupMembersPanel({
         <TableHeader>
           <TableRow>
             <TableHead className="w-10" />
+            {activeListId && <TableHead className="w-8" />}
             <TableHead>Display Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>UPN</TableHead>
@@ -112,10 +114,15 @@ function GroupMembersPanel({
             <TableRow key={member.id}>
               <TableCell>
                 <Checkbox
-                  checked={!!selectedUserIds[member.id]}
-                  onCheckedChange={() => onToggleUser(member.id)}
+                  checked={selectedIds.has(member.id)}
+                  onCheckedChange={() => toggleUser(member.id)}
                 />
               </TableCell>
+              {activeListId && (
+                <TableCell>
+                  <ComparisonIndicator userId={member.id} />
+                </TableCell>
+              )}
               <TableCell className="font-medium">
                 {member.displayName}
               </TableCell>
@@ -135,8 +142,8 @@ function GroupMembersPanel({
 export default function GroupsPage() {
   const [globalFilter, setGlobalFilter] = useState("");
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
-  const [selectedUserIds, setSelectedUserIds] = useState<Record<string, boolean>>({});
   const [availableUserIds, setAvailableUserIds] = useState<string[]>([]);
+  const { setVisibleUsers } = useVisibleUsers();
 
   const {
     data: groups = [],
@@ -151,6 +158,12 @@ export default function GroupsPage() {
       return res.json();
     },
   });
+
+  // Set visible users for comparison
+  useEffect(() => {
+    setVisibleUsers(availableUserIds);
+    return () => setVisibleUsers([]);
+  }, [availableUserIds, setVisibleUsers]);
 
   const columns = useMemo(
     () => [
@@ -241,17 +254,6 @@ export default function GroupsPage() {
     },
   });
 
-  const selectedIds = Object.keys(selectedUserIds).filter(
-    (k) => selectedUserIds[k]
-  );
-
-  const toggleUser = (userId: string) => {
-    setSelectedUserIds((prev) => ({
-      ...prev,
-      [userId]: !prev[userId],
-    }));
-  };
-
   useEffect(() => {
     if (!expandedGroupId) {
       setAvailableUserIds([]);
@@ -294,15 +296,7 @@ export default function GroupsPage() {
       {availableUserIds.length > 0 && (
         <UserSelectionToolbar
           totalCount={availableUserIds.length}
-          selectedIds={selectedIds}
           allIds={availableUserIds}
-          onSelectionChange={(ids) => {
-            const newSelection: Record<string, boolean> = {};
-            ids.forEach((id) => {
-              newSelection[id] = true;
-            });
-            setSelectedUserIds(newSelection);
-          }}
         />
       )}
 
@@ -362,8 +356,6 @@ export default function GroupsPage() {
                         >
                           <GroupMembersPanel
                             groupId={row.original.id}
-                            selectedUserIds={selectedUserIds}
-                            onToggleUser={toggleUser}
                             onMembersChange={handleVisibleMembersChange}
                           />
                         </TableCell>

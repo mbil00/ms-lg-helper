@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -19,6 +19,7 @@ import {
   X,
   Loader2,
   UserMinus,
+  UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { UserSelectionToolbar } from "@/components/user-selection-toolbar";
+import { ComparisonIndicator } from "@/components/comparison-indicator";
+import { useSyncedSelection } from "@/hooks/use-synced-selection";
+import { useActiveList, useVisibleUsers } from "@/contexts/list-panel-context";
+import { AddUsersDialog } from "@/components/add-users-dialog";
 
 interface ListDetail {
   id: string;
@@ -81,10 +87,12 @@ export default function ListDetailPage() {
   const queryClient = useQueryClient();
   const listId = params.id as string;
 
-  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [addUsersOpen, setAddUsersOpen] = useState(false);
+  const { activeListId } = useActiveList();
+  const { setVisibleUsers } = useVisibleUsers();
 
   const {
     data: list,
@@ -110,6 +118,16 @@ export default function ListDetailPage() {
         m.user?.userPrincipalName ?? m.userPrincipalName ?? "",
     }));
   }, [list]);
+
+  const allIds = useMemo(() => members.map((m) => m.userId), [members]);
+  const { rowSelection, onRowSelectionChange, pageSelectedIds } =
+    useSyncedSelection(allIds);
+
+  // Set visible users for comparison
+  useEffect(() => {
+    setVisibleUsers(allIds);
+    return () => setVisibleUsers([]);
+  }, [allIds, setVisibleUsers]);
 
   const updateDescriptionMutation = useMutation({
     mutationFn: async (description: string) => {
@@ -145,7 +163,6 @@ export default function ListDetailPage() {
       toast.success("Members removed");
       queryClient.invalidateQueries({ queryKey: ["list", listId] });
       queryClient.invalidateQueries({ queryKey: ["lists"] });
-      setRowSelection({});
     },
     onError: (err) => {
       toast.error(`Failed to remove members: ${err.message}`);
@@ -190,6 +207,18 @@ export default function ListDetailPage() {
         ),
         size: 40,
       }),
+      ...(activeListId
+        ? [
+            columnHelper.display({
+              id: "comparison",
+              header: () => null,
+              cell: ({ row }) => (
+                <ComparisonIndicator userId={row.original.userId} />
+              ),
+              size: 32,
+            }),
+          ]
+        : []),
       columnHelper.accessor("displayName", {
         header: "Display Name",
         cell: (info) => (
@@ -207,7 +236,7 @@ export default function ListDetailPage() {
         ),
       }),
     ],
-    []
+    [activeListId]
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -215,19 +244,15 @@ export default function ListDetailPage() {
     data: members,
     columns,
     state: { rowSelection },
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getRowId: (row) => row.userId,
   });
 
-  const selectedMemberIds = Object.keys(rowSelection).filter(
-    (k) => rowSelection[k]
-  );
-
   const handleRemoveSelected = () => {
-    if (selectedMemberIds.length === 0) return;
-    removeMembersMutation.mutate(selectedMemberIds);
+    if (pageSelectedIds.length === 0) return;
+    removeMembersMutation.mutate(pageSelectedIds);
   };
 
   if (error) {
@@ -330,8 +355,12 @@ export default function ListDetailPage() {
         )}
       </div>
 
+      {members.length > 0 && (
+        <UserSelectionToolbar totalCount={members.length} allIds={allIds} />
+      )}
+
       <div className="flex items-center gap-2">
-        {selectedMemberIds.length > 0 && (
+        {pageSelectedIds.length > 0 && (
           <Button
             variant="destructive"
             size="sm"
@@ -343,11 +372,20 @@ export default function ListDetailPage() {
             ) : (
               <UserMinus className="mr-1.5 h-4 w-4" />
             )}
-            Remove selected ({selectedMemberIds.length})
+            Remove selected ({pageSelectedIds.length})
           </Button>
         )}
 
         <div className="flex-1" />
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setAddUsersOpen(true)}
+        >
+          <UserPlus className="mr-1.5 h-4 w-4" />
+          Add users
+        </Button>
 
         <Button
           variant="outline"
@@ -440,6 +478,14 @@ export default function ListDetailPage() {
           )}
         </TableBody>
       </Table>
+
+      <AddUsersDialog
+        listId={listId}
+        existingUserIds={allIds}
+        open={addUsersOpen}
+        onOpenChange={setAddUsersOpen}
+        onDone={() => refetch()}
+      />
     </div>
   );
 }

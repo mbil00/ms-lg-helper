@@ -55,6 +55,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { MultiSelect } from "@/components/multi-select";
 
 interface UserList {
   id: string;
@@ -297,42 +298,30 @@ export default function ActionsPage() {
             <div className="space-y-1.5">
               {isLicenseAction && (
                 <>
-                  <Label>License</Label>
-                  <Select
-                    value={selectedSkuIds[0] ?? ""}
-                    onValueChange={(val) => setSelectedSkuIds(val ? [val] : [])}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select license" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {licenses.map((lic) => (
-                        <SelectItem key={lic.skuId} value={lic.skuId}>
-                          {lic.skuPartNumber}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Licenses</Label>
+                  <MultiSelect
+                    items={licenses.map((lic) => ({
+                      value: lic.skuId,
+                      label: lic.skuPartNumber,
+                    }))}
+                    selected={selectedSkuIds}
+                    onSelectionChange={setSelectedSkuIds}
+                    placeholder="Select licenses..."
+                  />
                 </>
               )}
               {isGroupAction && (
                 <>
-                  <Label>Group</Label>
-                  <Select
-                    value={selectedGroupIds[0] ?? ""}
-                    onValueChange={(val) => setSelectedGroupIds(val ? [val] : [])}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {groups.map((g) => (
-                        <SelectItem key={g.id} value={g.id}>
-                          {g.displayName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Groups</Label>
+                  <MultiSelect
+                    items={groups.map((g) => ({
+                      value: g.id,
+                      label: g.displayName,
+                    }))}
+                    selected={selectedGroupIds}
+                    onSelectionChange={setSelectedGroupIds}
+                    placeholder="Select groups..."
+                  />
                 </>
               )}
               {!isLicenseAction && !isGroupAction && (

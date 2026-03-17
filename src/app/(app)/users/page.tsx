@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   useReactTable,
@@ -27,13 +27,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { UserSelectionToolbar } from "@/components/user-selection-toolbar";
+import { ComparisonIndicator } from "@/components/comparison-indicator";
+import { useSyncedSelection } from "@/hooks/use-synced-selection";
+import { useVisibleUsers, useActiveList } from "@/contexts/list-panel-context";
 
 const columnHelper = createColumnHelper<GraphUser>();
 
 export default function UsersPage() {
   const [globalFilter, setGlobalFilter] = useState("");
-  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const { activeListId } = useActiveList();
+  const { setVisibleUsers } = useVisibleUsers();
 
   const {
     data: users = [],
@@ -48,6 +52,15 @@ export default function UsersPage() {
       return res.json();
     },
   });
+
+  const allIds = useMemo(() => users.map((u) => u.id), [users]);
+  const { rowSelection, onRowSelectionChange } = useSyncedSelection(allIds);
+
+  // Set visible users for comparison
+  useEffect(() => {
+    setVisibleUsers(allIds);
+    return () => setVisibleUsers([]);
+  }, [allIds, setVisibleUsers]);
 
   const handleRefreshFromGraph = async () => {
     setIsRefreshing(true);
@@ -83,6 +96,18 @@ export default function UsersPage() {
         ),
         size: 40,
       }),
+      ...(activeListId
+        ? [
+            columnHelper.display({
+              id: "comparison",
+              header: () => null,
+              cell: ({ row }) => (
+                <ComparisonIndicator userId={row.original.id} />
+              ),
+              size: 32,
+            }),
+          ]
+        : []),
       columnHelper.accessor("displayName", {
         header: "Display Name",
         cell: (info) => (
@@ -117,7 +142,7 @@ export default function UsersPage() {
           ),
       }),
     ],
-    []
+    [activeListId]
   );
 
   const table = useReactTable({
@@ -128,7 +153,7 @@ export default function UsersPage() {
       rowSelection,
     },
     onGlobalFilterChange: setGlobalFilter,
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange,
     globalFilterFn: (row, _columnId, filterValue) => {
       const search = filterValue.toLowerCase();
       const user = row.original;
@@ -147,11 +172,6 @@ export default function UsersPage() {
       pagination: { pageSize: 50 },
     },
   });
-
-  const selectedIds = Object.keys(rowSelection).filter(
-    (key) => rowSelection[key]
-  );
-  const allIds = users.map((u) => u.id);
 
   if (error) {
     return (
@@ -202,18 +222,7 @@ export default function UsersPage() {
       </div>
 
       {users.length > 0 && (
-        <UserSelectionToolbar
-          totalCount={users.length}
-          selectedIds={selectedIds}
-          allIds={allIds}
-          onSelectionChange={(ids) => {
-            const newSelection: Record<string, boolean> = {};
-            ids.forEach((id) => {
-              newSelection[id] = true;
-            });
-            setRowSelection(newSelection);
-          }}
-        />
+        <UserSelectionToolbar totalCount={users.length} allIds={allIds} />
       )}
 
       {isLoading ? (

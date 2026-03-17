@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { KeyRound, ChevronRight, Users, Shield, X } from "lucide-react";
 import type { GraphLicense, LicenseAssignee, GraphUser } from "@/lib/types";
@@ -24,12 +24,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { UserSelectionToolbar } from "@/components/user-selection-toolbar";
+import { ComparisonIndicator } from "@/components/comparison-indicator";
 import { cn } from "@/lib/utils";
+import { useGlobalSelection, useActiveList, useVisibleUsers } from "@/contexts/list-panel-context";
 
 export default function LicensesPage() {
   const [selectedSkuId, setSelectedSkuId] = useState<string | null>(null);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
-  const [selectedUserIds, setSelectedUserIds] = useState<Record<string, boolean>>({});
+  const { selectedIds, toggle: toggleUser } = useGlobalSelection();
+  const { activeListId } = useActiveList();
+  const { setVisibleUsers } = useVisibleUsers();
 
   const {
     data: licenses = [],
@@ -73,10 +77,6 @@ export default function LicensesPage() {
 
   const selectedLicense = licenses.find((l) => l.skuId === selectedSkuId);
 
-  const selectedIds = Object.keys(selectedUserIds).filter(
-    (k) => selectedUserIds[k]
-  );
-
   const allSelectableIds = useMemo(() => {
     const ids: string[] = [];
     if (assignees) {
@@ -92,12 +92,11 @@ export default function LicensesPage() {
     return ids;
   }, [assignees, groupMembers]);
 
-  const toggleUserSelection = (userId: string) => {
-    setSelectedUserIds((prev) => ({
-      ...prev,
-      [userId]: !prev[userId],
-    }));
-  };
+  // Set visible users for comparison
+  useEffect(() => {
+    setVisibleUsers(allSelectableIds);
+    return () => setVisibleUsers([]);
+  }, [allSelectableIds, setVisibleUsers]);
 
   if (error) {
     return (
@@ -144,7 +143,6 @@ export default function LicensesPage() {
                     selectedSkuId === license.skuId ? null : license.skuId
                   );
                   setExpandedGroupId(null);
-                  setSelectedUserIds({});
                 }}
               >
                 <CardHeader>
@@ -193,7 +191,6 @@ export default function LicensesPage() {
               onClick={() => {
                 setSelectedSkuId(null);
                 setExpandedGroupId(null);
-                setSelectedUserIds({});
               }}
             >
               <X className="h-4 w-4" />
@@ -203,15 +200,7 @@ export default function LicensesPage() {
           {allSelectableIds.length > 0 && (
             <UserSelectionToolbar
               totalCount={allSelectableIds.length}
-              selectedIds={selectedIds}
               allIds={allSelectableIds}
-              onSelectionChange={(ids) => {
-                const newSelection: Record<string, boolean> = {};
-                ids.forEach((id) => {
-                  newSelection[id] = true;
-                });
-                setSelectedUserIds(newSelection);
-              }}
             />
           )}
 
@@ -226,6 +215,7 @@ export default function LicensesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10" />
+                  {activeListId && <TableHead className="w-8" />}
                   <TableHead>Name</TableHead>
                   <TableHead>UPN</TableHead>
                   <TableHead>Type</TableHead>
@@ -239,13 +229,18 @@ export default function LicensesPage() {
                       <TableCell>
                         {assignee.type === "user" && (
                           <Checkbox
-                            checked={!!selectedUserIds[assignee.id]}
-                            onCheckedChange={() =>
-                              toggleUserSelection(assignee.id)
-                            }
+                            checked={selectedIds.has(assignee.id)}
+                            onCheckedChange={() => toggleUser(assignee.id)}
                           />
                         )}
                       </TableCell>
+                      {activeListId && (
+                        <TableCell>
+                          {assignee.type === "user" && (
+                            <ComparisonIndicator userId={assignee.id} />
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {assignee.type === "group" ? (
@@ -304,7 +299,7 @@ export default function LicensesPage() {
                     {assignee.type === "group" &&
                       expandedGroupId === assignee.id && (
                         <TableRow key={`${assignee.id}-members`}>
-                          <TableCell colSpan={5} className="bg-muted/30 p-0">
+                          <TableCell colSpan={activeListId ? 6 : 5} className="bg-muted/30 p-0">
                             <div className="px-8 py-3">
                               {groupMembersLoading ? (
                                 <div className="space-y-2">
@@ -320,6 +315,7 @@ export default function LicensesPage() {
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead className="w-10" />
+                                      {activeListId && <TableHead className="w-8" />}
                                       <TableHead>Display Name</TableHead>
                                       <TableHead>Email</TableHead>
                                       <TableHead>UPN</TableHead>
@@ -330,14 +326,17 @@ export default function LicensesPage() {
                                       <TableRow key={member.id}>
                                         <TableCell>
                                           <Checkbox
-                                            checked={
-                                              !!selectedUserIds[member.id]
-                                            }
+                                            checked={selectedIds.has(member.id)}
                                             onCheckedChange={() =>
-                                              toggleUserSelection(member.id)
+                                              toggleUser(member.id)
                                             }
                                           />
                                         </TableCell>
+                                        {activeListId && (
+                                          <TableCell>
+                                            <ComparisonIndicator userId={member.id} />
+                                          </TableCell>
+                                        )}
                                         <TableCell className="font-medium">
                                           {member.displayName}
                                         </TableCell>
