@@ -76,6 +76,13 @@ http://localhost:3000/api/auth/callback/microsoft-entra-id
   - `AUTH_MICROSOFT_ENTRA_ID_SECRET`
   - `AUTH_MICROSOFT_ENTRA_ID_TENANT_ID`
 
+The login flow requests these delegated scopes:
+
+- `openid`
+- `profile`
+- `email`
+- `User.Read`
+
 ### 2. Configure the Graph app
 
 The backend calls Microsoft Graph to:
@@ -89,9 +96,47 @@ The backend calls Microsoft Graph to:
 Grant the Graph application permissions your tenant requires for those actions, then grant admin consent. In most tenants this means reviewing permissions in the area of:
 
 - user read access
-- group read/write access
-- license assignment read/write access
-- tenant/subscribed SKU read access
+- group read and membership write access
+- license read and assignment write access
+
+### Recommended Microsoft Graph application permissions
+
+These are the permissions that best match the API calls in this codebase:
+
+| Permission | Why this app needs it |
+| --- | --- |
+| `User.Read.All` | List users from `/users` and read user properties used throughout the UI. |
+| `GroupMember.Read.All` | List groups and read group members. |
+| `GroupMember.ReadWrite.All` | Add and remove users from groups. |
+| `LicenseAssignment.Read.All` | List subscribed SKUs from `/subscribedSkus`. |
+| `LicenseAssignment.ReadWrite.All` | Assign and remove licenses with `/users/{id}/assignLicense`. |
+
+### Why these permissions map to this app
+
+- `GET /users` requires application permission `User.Read.All` at minimum.
+- `GET /groups` requires application permission `GroupMember.Read.All` at minimum.
+- `GET /groups/{id}/members` requires `GroupMember.Read.All`; because this app reads member user properties such as display name, mail, and UPN, `User.Read.All` is also appropriate.
+- `GET /subscribedSkus` requires `LicenseAssignment.Read.All` at minimum.
+- `POST /users/{id}/assignLicense` requires `LicenseAssignment.ReadWrite.All` at minimum.
+- `POST /groups/{id}/members/$ref` and `DELETE /groups/{id}/members/{id}/$ref` require `GroupMember.ReadWrite.All` at minimum for user members.
+
+### Optional broader permissions
+
+If your tenant prefers broader permissions over a minimal set, these higher-privilege permissions can also satisfy several reads:
+
+- `Directory.Read.All`
+- `Directory.ReadWrite.All`
+- `Group.Read.All`
+- `Group.ReadWrite.All`
+- `Organization.Read.All`
+
+Use them only if your tenant policy or admin workflow requires them. The table above is the closer least-privilege fit for this repo.
+
+### Important limitations
+
+- Role-assignable groups need extra permission and role setup beyond this app's default recommendation. Microsoft documents `RoleManagement.ReadWrite.Directory` as an additional requirement for those cases.
+- Dynamic membership groups can't have members removed through the standard group member delete API.
+- Group member reads can return limited data if the app lacks permission to read the underlying object type. This repo reads user properties from group membership responses, which is why `User.Read.All` is included above.
 
 Put that app's tenant ID, client ID, and secret into:
 
@@ -151,3 +196,13 @@ To check migration state:
 ```bash
 npx prisma migrate status
 ```
+
+## Microsoft Docs
+
+- List users: https://learn.microsoft.com/en-us/graph/api/user-list?view=graph-rest-1.0
+- List groups: https://learn.microsoft.com/en-us/graph/api/group-list?view=graph-rest-1.0
+- List group members: https://learn.microsoft.com/en-us/graph/api/group-list-members?view=graph-rest-1.0
+- List subscribed SKUs: https://learn.microsoft.com/en-us/graph/api/subscribedsku-list?view=graph-rest-1.0
+- Assign or remove user licenses: https://learn.microsoft.com/en-us/graph/api/user-assignlicense?view=graph-rest-1.0
+- Add group members: https://learn.microsoft.com/en-us/graph/api/group-post-members?view=graph-rest-1.0
+- Remove group members: https://learn.microsoft.com/en-us/graph/api/group-delete-members?view=graph-rest-1.0
