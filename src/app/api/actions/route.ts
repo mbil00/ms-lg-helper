@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGraphClient, withRetry } from "@/lib/graph";
+import { getGroupMembershipManagementBlockReason } from "@/lib/group-management";
 import { db } from "@/lib/db";
 import {
   forbiddenResponse,
@@ -12,6 +13,7 @@ import type {
   OperationType,
   OperationParams,
   DryRunResult,
+  GraphGroup,
 } from "@/lib/types";
 
 export async function GET() {
@@ -44,20 +46,16 @@ async function checkUserHasLicense(
   userId: string,
   skuId: string
 ): Promise<boolean> {
-  try {
-    const graphUser = await withRetry(() =>
-      client
-        .api(`/users/${userId}`)
-        .select(["assignedLicenses"])
-        .get()
-    );
-    const licenses: { skuId: string }[] = graphUser.assignedLicenses || [];
-    return licenses.some(
-      (l) => l.skuId.toLowerCase() === skuId.toLowerCase()
-    );
-  } catch {
-    return false;
-  }
+  const graphUser = await withRetry(() =>
+    client
+      .api(`/users/${userId}`)
+      .select(["assignedLicenses"])
+      .get()
+  );
+  const licenses: { skuId: string }[] = graphUser.assignedLicenses || [];
+  return licenses.some(
+    (l) => l.skuId.toLowerCase() === skuId.toLowerCase()
+  );
 }
 
 async function checkUserInGroup(
@@ -70,9 +68,51 @@ async function checkUserInGroup(
       client.api(`/groups/${groupId}/members/${userId}`).get()
     );
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    const graphError = error as { statusCode?: number };
+    if (graphError.statusCode === 404) {
+      return false;
+    }
+    throw error;
   }
+}
+
+async function validateGroupTargets(
+  client: ReturnType<typeof getGraphClient>,
+  groupIds: string[]
+) {
+  const groups = await Promise.all(
+    groupIds.map(async (groupId) => {
+      const group = await withRetry(() =>
+        client.api(`/groups/${groupId}`).select([
+          "id",
+          "displayName",
+          "groupTypes",
+          "mailEnabled",
+          "securityEnabled",
+          "membershipRule",
+          "isAssignableToRole",
+        ]).get()
+      );
+
+      return group as GraphGroup;
+    })
+  );
+
+  const blockedGroups = groups
+    .map((group) => ({
+      id: group.id,
+      displayName: group.displayName,
+      reason: getGroupMembershipManagementBlockReason(group),
+    }))
+    .filter(
+      (
+        group
+      ): group is { id: string; displayName: string; reason: string } =>
+        group.reason !== null
+    );
+
+  return blockedGroups;
 }
 
 async function executeLicenseAssign(
@@ -177,6 +217,23 @@ export async function POST(request: NextRequest) {
         { error: "No target IDs provided in params" },
         { status: 400 }
       );
+    }
+
+    if (type === "add_to_group" || type === "remove_from_group") {
+      const blockedGroups = await validateGroupTargets(client, targetIds);
+
+      if (blockedGroups.length > 0) {
+        const details = blockedGroups
+          .map((group) => `${group.displayName}: ${group.reason}`)
+          .join(" | ");
+
+        return NextResponse.json(
+          {
+            error: `Unsupported target groups for membership management. ${details}`,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // --- DRY RUN ---

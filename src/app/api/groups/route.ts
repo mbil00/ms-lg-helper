@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGraphClient, getAllPages, withRetry } from "@/lib/graph";
+import { withGroupManagementMetadata } from "@/lib/group-management";
 import {
   forbiddenResponse,
   getAuthenticatedUser,
@@ -15,22 +16,49 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const groupId = searchParams.get("groupId");
+  const actionableOnly = searchParams.get("actionable") === "true";
 
   try {
     const client = getGraphClient();
 
     if (groupId) {
-      // Fetch members of a specific group
+      // Fetch direct group members and keep only users for user-centric flows.
       const members = await withRetry(() =>
-        getAllPages<GraphUser>(client, `/groups/${groupId}/members`, [
+        getAllPages<
+          Partial<GraphUser> & {
+            "@odata.type"?: string | null;
+            id: string;
+            displayName?: string | null;
+            mail?: string | null;
+            userPrincipalName?: string | null;
+            jobTitle?: string | null;
+          }
+        >(client, `/groups/${groupId}/members`, [
           "id",
           "displayName",
           "mail",
           "userPrincipalName",
+          "jobTitle",
         ])
       );
 
-      return NextResponse.json(members);
+      const userMembers: GraphUser[] = members
+        .filter(
+          (member) =>
+            member["@odata.type"] === "#microsoft.graph.user" ||
+            !!member.userPrincipalName
+        )
+        .map((member) => ({
+          id: member.id,
+          displayName: member.displayName ?? "",
+          mail: member.mail ?? null,
+          userPrincipalName: member.userPrincipalName ?? "",
+          jobTitle: member.jobTitle ?? null,
+          accountEnabled: true,
+          department: null,
+        }));
+
+      return NextResponse.json(userMembers);
     }
 
     // Fetch all groups
@@ -43,10 +71,16 @@ export async function GET(request: NextRequest) {
         "mailEnabled",
         "securityEnabled",
         "membershipRule",
+        "isAssignableToRole",
       ])
     );
 
-    return NextResponse.json(groups);
+    const groupsWithMetadata = groups.map(withGroupManagementMetadata);
+    const responseGroups = actionableOnly
+      ? groupsWithMetadata.filter((group) => group.canManageMembership)
+      : groupsWithMetadata;
+
+    return NextResponse.json(responseGroups);
   } catch (error) {
     console.error("Failed to fetch groups from Graph:", error);
     return NextResponse.json(

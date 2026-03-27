@@ -36,6 +36,9 @@ export interface GraphGroup {
   mailEnabled: boolean;
   securityEnabled: boolean;
   membershipRule: string | null;
+  isAssignableToRole?: boolean | null;
+  canManageMembership?: boolean;
+  managementBlockedReason?: string | null;
   memberCount?: number;
 }
 

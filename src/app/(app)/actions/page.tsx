@@ -138,8 +138,13 @@ export default function ActionsPage() {
   const { data: groups = [] } = useQuery<GraphGroup[]>({
     queryKey: ["groups"],
     queryFn: async () => {
-      const res = await fetch("/api/groups");
-      if (!res.ok) throw new Error("Failed to fetch groups");
+      const res = await fetch("/api/groups?actionable=true");
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? "Failed to fetch groups");
+      }
       return res.json();
     },
     enabled: actionType === "add_to_group" || actionType === "remove_from_group",
@@ -186,7 +191,12 @@ export default function ActionsPage() {
           dryRun: true,
         }),
       });
-      if (!res.ok) throw new Error("Dry run failed");
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? "Dry run failed");
+      }
       return res.json() as Promise<DryRunResult>;
     },
     onSuccess: (result) => {
@@ -210,7 +220,12 @@ export default function ActionsPage() {
           dryRun: false,
         }),
       });
-      if (!res.ok) throw new Error("Execution failed");
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? "Execution failed");
+      }
       return res.json();
     },
     onSuccess: (data) => {

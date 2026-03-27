@@ -8,6 +8,9 @@ import {
 } from "@/lib/auth-guard";
 import type { GraphLicense, GraphUser, GraphGroup, LicenseAssignee } from "@/lib/types";
 
+const GUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function GET(request: NextRequest) {
   const user = await getAuthenticatedUser();
   if (!user) return unauthorizedResponse();
@@ -20,19 +23,23 @@ export async function GET(request: NextRequest) {
     const client = getGraphClient();
 
     if (skuId) {
+      if (!GUID_PATTERN.test(skuId)) {
+        return NextResponse.json({ error: "Invalid skuId" }, { status: 400 });
+      }
+
       // Fetch users and groups assigned to this specific license
       const [users, groups] = await Promise.all([
         withRetry(() =>
           getAllPages<GraphUser>(
             client,
-            `/users?$filter=assignedLicenses/any(l:l/skuId eq '${skuId}')`,
+            `/users?$filter=assignedLicenses/any(l:l/skuId eq ${skuId})`,
             ["id", "displayName", "mail", "userPrincipalName"]
           )
         ),
         withRetry(() =>
           getAllPages<GraphGroup>(
             client,
-            `/groups?$filter=assignedLicenses/any(l:l/skuId eq '${skuId}')`,
+            `/groups?$filter=assignedLicenses/any(l:l/skuId eq ${skuId})`,
             ["id", "displayName", "description"]
           )
         ),
